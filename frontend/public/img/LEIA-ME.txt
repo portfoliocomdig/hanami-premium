@@ -1,0 +1,35 @@
+IMPORTANTE — imagem de fundo do Hero (a seção de abertura do site):
+O style.css referencia diretamente "../img/2.jpeg" (era a imagem de
+capa do hero no site original). Coloque essa imagem aqui também:
+
+2.jpeg   <- fundo da seção Hero (obrigatória para o efeito de zoom funcionar)
+
+Coloque aqui as imagens dos pratos, com estes nomes exatos
+(usados em backend/src/seed/seed.js, campo imageUrl):
+
+hanami-combo.jpeg
+hanami-especial.jpeg
+hanami-sashimi1.jpeg
+hanami-sashimi2.jpeg
+hanami-nikuman.jpeg
+hanami-gyuman.jpeg
+hanami-temaki1.jpeg
+hanami-temaki2.jpeg
+hanami-nigiri1.jpeg
+hanami-nigiri2.jpeg
+hanami-ramen.jpeg
+hanami-udon.jpeg
+hanami-donburi.jpeg
+hanami-edamame.jpeg
+hanami-gyoza.jpeg
+hanami-sunomono.jpeg
+hanami-mochi.jpeg
+hanami-dorayaki.jpeg
+
+Também pode adicionar (usados no site original, opcionais no React):
+logo.png
+favicon32.png
+chef.jpeg
+
+Enquanto as imagens não estiverem aqui, o ProductCard.jsx já tem um
+fallback automático (https://picsum.photos/...) para não quebrar o layout.

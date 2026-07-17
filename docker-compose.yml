@@ -1,0 +1,60 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hanami-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-hanami_db}
+      POSTGRES_USER: ${DB_USER:-hanami_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hanami_pass}
+    ports:
+      - '5432:5432'
+    volumes:
+      - hanami_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-hanami_user} -d ${DB_NAME:-hanami_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: hanami-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-hanami_db}
+      DB_USER: ${DB_USER:-hanami_user}
+      DB_PASSWORD: ${DB_PASSWORD:-hanami_pass}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      PAGBANK_API_URL: ${PAGBANK_API_URL:-https://sandbox.api.pagseguro.com}
+      PAGBANK_TOKEN: ${PAGBANK_TOKEN}
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+    ports:
+      - '3001:3001'
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
+        VITE_PAGBANK_PUBLIC_KEY: ${VITE_PAGBANK_PUBLIC_KEY}
+    container_name: hanami-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '8080:80'
+
+volumes:
+  hanami_db_data:

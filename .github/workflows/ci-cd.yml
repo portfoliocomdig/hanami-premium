@@ -1,0 +1,119 @@
+name: CI/CD Hanami
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  packages: write
+
+jobs:
+  # ── 1) Testes do back-end ───────────────────────────────────────────
+  backend-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hanami_test
+          POSTGRES_USER: hanami_user
+          POSTGRES_PASSWORD: hanami_pass
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hanami_user -d hanami_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Executar testes
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: hanami_test
+          DB_USER: hanami_user
+          DB_PASSWORD: hanami_pass
+          JWT_SECRET: ci-test-secret
+        run: npm test --if-present
+
+  # ── 2) Build do front-end (também gera o artefato para o GitHub Pages) ──
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build (gera dist/ para GitHub Pages)
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_PAGBANK_PUBLIC_KEY: ${{ secrets.VITE_PAGBANK_PUBLIC_KEY }}
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  # ── 3) Publica as imagens Docker (back-end e front-end) no GHCR ─────
+  publish-images:
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push — backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/backend:latest
+
+      - name: Build e push — frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            VITE_PAGBANK_PUBLIC_KEY=${{ secrets.VITE_PAGBANK_PUBLIC_KEY }}
+          tags: ghcr.io/${{ github.repository }}/frontend:latest
+
+  # ── 4) Deploy do front-end (estático) no GitHub Pages ───────────────
+  # Opcional — só roda se você habilitar Pages em Settings > Pages > Source: GitHub Actions.
+  # Se for publicar tudo via Docker/Nginx no seu próprio servidor (docker-compose.prod.yml),
+  # você pode remover este job.
+  deploy-pages:
+    needs: frontend-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
